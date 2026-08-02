@@ -146,9 +146,10 @@ resource "aws_key_pair" "def_key" {
 resource "aws_instance" "public_instance" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
-  key_name               = aws_key_pair.main_key_pair.key_name
+  key_name               = aws_key_pair.def_key.key_name
   subnet_id              = aws_subnet.public_subnet.id
-  vpc_security_group_ids = [aws_security_group.public_sg]
+  vpc_security_group_ids = [aws_security_group.public_sg.id]
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name = "public-instance"
@@ -176,4 +177,43 @@ resource "aws_vpc_endpoint_route_table_association" "public_s3_route" {
 resource "aws_vpc_endpoint_route_table_association" "private_s3_route" {
   route_table_id  = aws_route_table.private_rt.id
   vpc_endpoint_id = aws_vpc_endpoint.s3_gateway.id
+}
+
+data "aws_iam_policy_document" "ec2_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ec2_s3_role" {
+  name = "ec2-s3-access-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+}
+
+data "aws_iam_policy_document" "ec2_access_policy" {
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      "arn:aws:s3:::*",
+      "arn:aws:s3:::*/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "attach_s3_policy" {
+  name = "s3-read-access-policy"
+  role = aws_iam_role.ec2_s3_role.id
+  policy = data.aws_iam_policy_document.ec2_access_policy.json
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2-s3-instance-profile"
+  role = aws_iam_role.ec2_s3_role.name
 }
