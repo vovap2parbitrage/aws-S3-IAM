@@ -217,3 +217,67 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2-s3-instance-profile"
   role = aws_iam_role.ec2_s3_role.name
 }
+
+resource "aws_s3_bucket" "my_app_bucket" {
+  bucket_prefix = "test-bucket-"
+  
+  tags = {
+    Name = "my-app-bucket"
+  }
+}
+
+resource "aws_s3_bucket" "my_replicated_bucket" {
+  bucket_prefix = "test-replicated-bucket-"
+
+  tags = {
+    Name = "my-replicated-bucket"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "app_bucket_versioning" {
+  bucket = aws_s3_bucket.my_app_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "replicated_bucket_versioning" {
+  bucket = aws_s3_bucket.my_replicated_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_website_configuration" "website_config" {
+  bucket = aws_s3_bucket.my_app_bucket.id
+
+  index_document {
+    suffix = "index.html"
+  }
+}
+
+data "aws_iam_policy_document" "bucket_policy" {
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      aws_s3_bucket.my_app_bucket.arn,
+      "${aws_s3_bucket.my_app_bucket.arn}/*"
+    ]
+
+    principals {
+      type = "AWS"
+      identifiers = [aws_iam_role.ec2_s3_role.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "apply_policy" {
+  bucket = aws_s3_bucket.my_app_bucket.id
+  policy = data.aws_iam_policy_document.bucket_policy.json
+}
