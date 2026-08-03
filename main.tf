@@ -7,8 +7,9 @@ resource "aws_vpc" "main_vpc" {
 }
 
 resource "aws_subnet" "public_subnet" {
-  vpc_id     = aws_vpc.main_vpc.id
-  cidr_block = var.public_subnet_cidr
+  vpc_id                  = aws_vpc.main_vpc.id
+  cidr_block              = var.public_subnet_cidr
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "public-subnet"
@@ -149,7 +150,7 @@ resource "aws_instance" "public_instance" {
   key_name               = aws_key_pair.def_key.key_name
   subnet_id              = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.public_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name = "public-instance"
@@ -183,14 +184,14 @@ data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["ec2.amazonaws.com"]
     }
   }
 }
 
 resource "aws_iam_role" "ec2_s3_role" {
-  name = "ec2-s3-access-role"
+  name               = "ec2-s3-access-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
@@ -208,8 +209,8 @@ data "aws_iam_policy_document" "ec2_access_policy" {
 }
 
 resource "aws_iam_role_policy" "attach_s3_policy" {
-  name = "s3-read-access-policy"
-  role = aws_iam_role.ec2_s3_role.id
+  name   = "s3-read-access-policy"
+  role   = aws_iam_role.ec2_s3_role.id
   policy = data.aws_iam_policy_document.ec2_access_policy.json
 }
 
@@ -220,7 +221,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 resource "aws_s3_bucket" "my_app_bucket" {
   bucket_prefix = "test-bucket-"
-  
+
   tags = {
     Name = "my-app-bucket"
   }
@@ -271,7 +272,7 @@ data "aws_iam_policy_document" "bucket_policy" {
     ]
 
     principals {
-      type = "AWS"
+      type        = "AWS"
       identifiers = [aws_iam_role.ec2_s3_role.arn]
     }
   }
@@ -287,14 +288,14 @@ data "aws_iam_policy_document" "s3_assume_role" {
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["s3.amazonaws.com"]
     }
   }
 }
 
 resource "aws_iam_role" "replication_role" {
-  name = "s3-bucket-replication-role"
+  name               = "s3-bucket-replication-role"
   assume_role_policy = data.aws_iam_policy_document.s3_assume_role.json
 }
 
@@ -330,8 +331,8 @@ data "aws_iam_policy_document" "replication_policy" {
 }
 
 resource "aws_iam_role_policy" "attach_replication_policy" {
-  name = "s3-replication-policy"
-  role = aws_iam_role.replication_role.id
+  name   = "s3-replication-policy"
+  role   = aws_iam_role.replication_role.id
   policy = data.aws_iam_policy_document.replication_policy.json
 }
 
@@ -341,15 +342,15 @@ resource "aws_s3_bucket_replication_configuration" "replication_config" {
     aws_s3_bucket_versioning.replicated_bucket_versioning
   ]
 
-  role = aws_iam_role.replication_role.arn
+  role   = aws_iam_role.replication_role.arn
   bucket = aws_s3_bucket.my_app_bucket.id
 
   rule {
-    id = "backup-entire-bucket"
+    id     = "backup-entire-bucket"
     status = "Enabled"
 
     destination {
-      bucket = aws_s3_bucket.my_replicated_bucket.arn
+      bucket        = aws_s3_bucket.my_replicated_bucket.arn
       storage_class = "STANDARD"
     }
   }
