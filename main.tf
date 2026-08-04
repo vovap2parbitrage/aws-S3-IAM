@@ -152,6 +152,8 @@ resource "aws_instance" "public_instance" {
   vpc_security_group_ids = [aws_security_group.public_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
+  user_data = file("${path.module}/scripts/userdata.sh")
+
   tags = {
     Name = "public-instance"
   }
@@ -161,7 +163,7 @@ data "aws_region" "current" {}
 
 resource "aws_vpc_endpoint" "s3_gateway" {
   vpc_id       = aws_vpc.main_vpc.id
-  service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
+  service_name = "com.amazonaws.${data.aws_region.current.region}.s3"
 
   vpc_endpoint_type = "Gateway"
 
@@ -199,7 +201,9 @@ data "aws_iam_policy_document" "ec2_access_policy" {
   statement {
     actions = [
       "s3:GetObject",
-      "s3:ListBucket"
+      "s3:ListBucket",
+      "s3:PutObject",
+      "s3:ListAllMyBuckets"
     ]
     resources = [
       "arn:aws:s3:::*",
@@ -263,7 +267,8 @@ data "aws_iam_policy_document" "bucket_policy" {
   statement {
     actions = [
       "s3:GetObject",
-      "s3:ListBucket"
+      "s3:ListBucket",
+      "s3:PutObject"
     ]
 
     resources = [
