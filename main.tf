@@ -228,7 +228,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 resource "aws_s3_bucket" "app_bucket" {
-  bucket_prefix = "app_bucket_"
+  bucket_prefix = "app-bucket-"
   force_destroy = true
 
   tags = {
@@ -237,7 +237,7 @@ resource "aws_s3_bucket" "app_bucket" {
 }
 
 resource "aws_s3_bucket" "replicated_app_bucket" {
-  bucket_prefix = "replicated_app_bucket_"
+  bucket_prefix = "replicated-app-bucket-s"
   force_destroy = true
 
   tags = {
