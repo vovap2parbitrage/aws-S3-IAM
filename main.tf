@@ -349,8 +349,8 @@ data "aws_iam_policy_document" "replication_policy" {
 }
 
 resource "aws_iam_role_policy" "s3_app_replication_policy_attachment" {
-  name = "s3_replication_policy"
-  role = aws_iam_role.replication_role.name
+  name   = "s3_replication_policy"
+  role   = aws_iam_role.replication_role.name
   policy = data.aws_iam_policy_document.replication_policy.json
 }
 
@@ -360,16 +360,16 @@ resource "aws_s3_bucket_replication_configuration" "s3_app_replication_config" {
     aws_s3_bucket_versioning.s3_replicated_versioning
   ]
 
-  role = aws_iam_role.replication_role.arn
+  role   = aws_iam_role.replication_role.arn
   bucket = aws_s3_bucket.app_bucket.id
 
 
   rule {
-    id = "backup_entire_bucket"
+    id     = "backup_entire_bucket"
     status = "Enabled"
 
     destination {
-      bucket    = aws_s3_bucket.replicated_app_bucket.arn
+      bucket        = aws_s3_bucket.replicated_app_bucket.arn
       storage_class = "STANDARD"
     }
   }
