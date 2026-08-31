@@ -219,7 +219,7 @@ data "aws_iam_policy_document" "ec2_s3_permissions" {
 resource "aws_iam_role_policy" "attach_iam_role_permissions" {
   name   = "read_write_role_policy_attachment"
   role   = aws_iam_role.ec2_s3_role.id
-  policy = data.aws_iam_policy_document.s3_access_role.json
+  policy = data.aws_iam_policy_document.ec2_s3_permissions.json
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
