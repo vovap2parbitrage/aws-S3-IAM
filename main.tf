@@ -161,7 +161,7 @@ resource "aws_instance" "public_instance" {
 
 data "aws_region" "current" {}
 
-resource "aws_vpc_endpoint" "s3_gateway" {
+resource "aws_vpc_endpoint" "s3_vpc_endpoint" {
   vpc_id       = aws_vpc.main_vpc.id
   service_name = "com.amazonaws.${data.aws_region.current.region}.s3"
 
@@ -172,19 +172,20 @@ resource "aws_vpc_endpoint" "s3_gateway" {
   }
 }
 
-resource "aws_vpc_endpoint_route_table_association" "public_s3_route" {
+resource "aws_vpc_endpoint_route_table_association" "s3_vpc_endpoint_public_rt_assoc" {
+  vpc_endpoint_id = aws_vpc_endpoint.s3_vpc_endpoint.id
   route_table_id  = aws_route_table.public_rt.id
-  vpc_endpoint_id = aws_vpc_endpoint.s3_gateway.id
 }
 
-resource "aws_vpc_endpoint_route_table_association" "private_s3_route" {
+resource "aws_vpc_endpoint_route_table_association" "s3_vpc_endpoint_private_rt_assoc" {
+  vpc_endpoint_id = aws_vpc_endpoint.s3_vpc_endpoint.id
   route_table_id  = aws_route_table.private_rt.id
-  vpc_endpoint_id = aws_vpc_endpoint.s3_gateway.id
 }
 
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
+
     principals {
       type        = "Service"
       identifiers = ["ec2.amazonaws.com"]
@@ -193,18 +194,21 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 }
 
 resource "aws_iam_role" "ec2_s3_role" {
-  name               = "ec2-s3-access-role"
+  name               = "ec2_s3_access_role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
-data "aws_iam_policy_document" "ec2_access_policy" {
+data "aws_iam_policy_document" "ec2_s3_permissions" {
   statement {
+    effect = "Allow"
+
     actions = [
+      "s3:PutObject",
       "s3:GetObject",
       "s3:ListBucket",
-      "s3:PutObject",
       "s3:ListAllMyBuckets"
     ]
+
     resources = [
       "arn:aws:s3:::*",
       "arn:aws:s3:::*/*"
@@ -212,70 +216,72 @@ data "aws_iam_policy_document" "ec2_access_policy" {
   }
 }
 
-resource "aws_iam_role_policy" "attach_s3_policy" {
-  name   = "s3-read-access-policy"
+resource "aws_iam_role_policy" "attach_iam_role_permissions" {
+  name   = "read_write_role_policy_attachment"
   role   = aws_iam_role.ec2_s3_role.id
-  policy = data.aws_iam_policy_document.ec2_access_policy.json
+  policy = data.aws_iam_policy_document.s3_access_role.json
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-s3-instance-profile"
+  name = "ec2_s3_instance_profile"
   role = aws_iam_role.ec2_s3_role.name
 }
 
-resource "aws_s3_bucket" "my_app_bucket" {
-  bucket_prefix = "test-bucket-"
+resource "aws_s3_bucket" "app_bucket" {
+  bucket_prefix = "app_bucket_"
   force_destroy = true
 
   tags = {
-    Name = "my-app-bucket"
+    Name = "app-bucket"
   }
 }
 
-resource "aws_s3_bucket" "my_replicated_bucket" {
-  bucket_prefix = "test-replicated-bucket-"
+resource "aws_s3_bucket" "replicated_app_bucket" {
+  bucket_prefix = "replicated_app_bucket_"
   force_destroy = true
 
   tags = {
-    Name = "my-replicated-bucket"
+    Name = "replicated-app-bucket"
   }
 }
 
-resource "aws_s3_bucket_versioning" "app_bucket_versioning" {
-  bucket = aws_s3_bucket.my_app_bucket.id
+resource "aws_s3_bucket_versioning" "s3_app_versioning" {
+  bucket = aws_s3_bucket.app_bucket.id
 
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_versioning" "replicated_bucket_versioning" {
-  bucket = aws_s3_bucket.my_replicated_bucket.id
+resource "aws_s3_bucket_versioning" "s3_replicated_versioning" {
+  bucket = aws_s3_bucket.replicated_app_bucket.id
 
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_website_configuration" "website_config" {
-  bucket = aws_s3_bucket.my_app_bucket.id
+resource "aws_s3_bucket_website_configuration" "s3_website_config" {
+  bucket = aws_s3_bucket.app_bucket.id
 
   index_document {
     suffix = "index.html"
   }
 }
 
-data "aws_iam_policy_document" "bucket_policy" {
+data "aws_iam_policy_document" "app_bucket_policy" {
   statement {
+    effect = "Allow"
+
     actions = [
+      "s3:PutObject",
       "s3:GetObject",
-      "s3:ListBucket",
-      "s3:PutObject"
+      "s3:ListBucket"
     ]
 
     resources = [
-      aws_s3_bucket.my_app_bucket.arn,
-      "${aws_s3_bucket.my_app_bucket.arn}/*"
+      aws_s3_bucket.app_bucket.arn,
+      "${aws_s3_bucket.app_bucket.arn}/*"
     ]
 
     principals {
@@ -285,9 +291,9 @@ data "aws_iam_policy_document" "bucket_policy" {
   }
 }
 
-resource "aws_s3_bucket_policy" "apply_app_policy" {
-  bucket = aws_s3_bucket.my_app_bucket.id
-  policy = data.aws_iam_policy_document.bucket_policy.json
+resource "aws_s3_bucket_policy" "app_bucket_apply_policy" {
+  bucket = aws_s3_bucket.app_bucket.id
+  policy = data.aws_iam_policy_document.app_bucket_policy.json
 }
 
 data "aws_iam_policy_document" "s3_assume_role" {
@@ -302,62 +308,68 @@ data "aws_iam_policy_document" "s3_assume_role" {
 }
 
 resource "aws_iam_role" "replication_role" {
-  name               = "s3-bucket-replication-role"
+  name               = "s3_replication_role"
   assume_role_policy = data.aws_iam_policy_document.s3_assume_role.json
 }
 
 data "aws_iam_policy_document" "replication_policy" {
   statement {
+    effect = "Allow"
+
     actions = [
       "s3:GetReplicationConfiguration",
       "s3:ListBucket"
     ]
 
-    resources = [aws_s3_bucket.my_app_bucket.arn]
+    resources = [aws_s3_bucket.app_bucket.arn]
   }
 
   statement {
+    effect = "Allow"
+
     actions = [
       "s3:GetObjectVersionForReplication",
-      "s3:GetObjectVersionAcl",
       "s3:GetObjectVersionTagging"
     ]
 
-    resources = ["${aws_s3_bucket.my_app_bucket.arn}/*"]
+    resources = ["${aws_s3_bucket.app_bucket.arn}/*"]
   }
 
   statement {
+    effect = "Allow"
+
     actions = [
       "s3:ReplicateObject",
       "s3:ReplicateDelete",
       "s3:ReplicateTags"
     ]
 
-    resources = ["${aws_s3_bucket.my_replicated_bucket.arn}/*"]
+    resources = ["${aws_s3_bucket.replicated_app_bucket.arn}/*"]
   }
 }
 
-resource "aws_iam_role_policy" "attach_replication_policy" {
-  name   = "s3-replication-policy"
-  role   = aws_iam_role.replication_role.id
+resource "aws_iam_role_policy" "s3_app_replication_policy_attachment" {
+  name = "s3_replication_policy"
+  role = aws_iam_role.replication_role.name
   policy = data.aws_iam_policy_document.replication_policy.json
 }
 
-resource "aws_s3_bucket_replication_configuration" "replication_config" {
+resource "aws_s3_bucket_replication_configuration" "s3_app_replication_config" {
   depends_on = [
-    aws_s3_bucket_versioning.app_bucket_versioning,
-    aws_s3_bucket_versioning.replicated_bucket_versioning
+    aws_s3_bucket_versioning.s3_app_versioning,
+    aws_s3_bucket_versioning.s3_replicated_versioning
   ]
 
-  role   = aws_iam_role.replication_role.arn
-  bucket = aws_s3_bucket.my_app_bucket.id
+  role = aws_iam_role.replication_role.arn
+  bucket = aws_s3_bucket.app_bucket.id
+
 
   rule {
-    id     = "backup-entire-bucket"
+    id = "backup_entire_bucket"
     status = "Enabled"
 
     destination {
-      bucket        = aws_s3_bucket.my_replicated_bucket.arn
+      bucket    = aws_s3_bucket.replicated_app_bucket.arn
       storage_class = "STANDARD"
     }
   }
