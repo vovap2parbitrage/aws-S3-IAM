@@ -329,6 +329,7 @@ data "aws_iam_policy_document" "replication_policy" {
 
     actions = [
       "s3:GetObjectVersionForReplication",
+      "s3:GetObjectVersionAcl",
       "s3:GetObjectVersionTagging"
     ]
 
